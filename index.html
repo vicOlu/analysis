@@ -580,11 +580,6 @@
             border-radius: 4px;
         }
 
-        .signal-badge.darkpool {
-            background: rgba(88, 166, 255, 0.15);
-            color: var(--accent-info);
-        }
-
         .signal-badge.insider {
             background: rgba(163, 113, 247, 0.15);
             color: var(--accent-purple);
@@ -1224,18 +1219,11 @@
                 ).reduce((s, f) => s + f.Premium, 0);
                 const flowDirection = tickerBullish > tickerBearish ? 'bullish' : 'bearish';
                 
-                // Dark pool activity
-                if (alertStreamData.darkPool[ticker]) {
-                    signals.push({ type: 'darkpool', count: alertStreamData.darkPool[ticker].length });
-                }
-                
-                // Block trades with direction
+                // Block trades with direction (AA/BB only - plain dark pool and neutral blocks removed as non-directional)
                 if (alertStreamData.blocks[ticker]) {
                     const blocks = alertStreamData.blocks[ticker];
                     const bullishBlocks = blocks.filter(b => b.direction === 'bullish');
                     const bearishBlocks = blocks.filter(b => b.direction === 'bearish');
-                    const neutralBlocks = blocks.filter(b => b.direction === 'neutral');
-                    const totalNotional = blocks.reduce((s, b) => s + b.notional, 0);
                     
                     if (bullishBlocks.length > 0) {
                         const match = flowDirection === 'bullish';
@@ -1253,13 +1241,6 @@
                             count: bearishBlocks.length,
                             notional: bearishBlocks.reduce((s, b) => s + b.notional, 0),
                             match
-                        });
-                    }
-                    if (neutralBlocks.length > 0) {
-                        signals.push({ 
-                            type: 'block_neutral', 
-                            count: neutralBlocks.length,
-                            notional: neutralBlocks.reduce((s, b) => s + b.notional, 0)
                         });
                     }
                 }
@@ -1338,8 +1319,7 @@
             correlatedSignals.sort((a, b) => b.confirmation - a.confirmation || b.premium - a.premium);
             
             const correlatedSection = document.getElementById('correlated-signals-section');
-            const hasAlertData = Object.keys(alertStreamData.darkPool).length > 0 || 
-                                 Object.keys(alertStreamData.blocks).length > 0 ||
+            const hasAlertData = Object.keys(alertStreamData.blocks).length > 0 ||
                                  Object.keys(alertStreamData.insider).length > 0 || 
                                  Object.keys(alertStreamData.earnings).length > 0 ||
                                  Object.keys(alertStreamData.weekHigh).length > 0 ||
@@ -1363,10 +1343,8 @@
                     
                     const csHtml = displaySignals.map(cs => {
                     const signalBadges = cs.signals.map(s => {
-                        if (s.type === 'darkpool') return `<span class="signal-badge darkpool">🌑 Dark Pool ×${s.count}</span>`;
                         if (s.type === 'block_bullish') return `<span class="signal-badge" style="background:rgba(63,185,80,0.15);color:var(--accent-bullish)">▲ Block AA ×${s.count} ${fmt(s.notional)}${s.match ? ' ✓' : ''}</span>`;
                         if (s.type === 'block_bearish') return `<span class="signal-badge" style="background:rgba(248,81,73,0.15);color:var(--accent-bearish)">▼ Block BB ×${s.count} ${fmt(s.notional)}${s.match ? ' ✓' : ''}</span>`;
-                        if (s.type === 'block_neutral') return `<span class="signal-badge" style="background:rgba(88,166,255,0.15);color:var(--accent-info)">◆ Block ×${s.count} ${fmt(s.notional)}</span>`;
                         if (s.type === 'insider') return `<span class="signal-badge insider">👤 Insider ×${s.count}</span>`;
                         if (s.type === 'weekhigh') return `<span class="signal-badge" style="background:rgba(63,185,80,0.15);color:var(--accent-bullish)">🔺 52W High</span>`;
                         if (s.type === 'weeklow') return `<span class="signal-badge" style="background:rgba(248,81,73,0.15);color:var(--accent-bearish)">🔻 52W Low</span>`;
@@ -1603,23 +1581,24 @@
             }).join('');
             document.getElementById('clustering-analysis').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only clusters with conviction score ≥ 6</p>' : '') + (clHtml || '<p style="color:var(--text-muted)">No significant clustering detected.</p>');
 
-            // Large trades - $200K+ AND AA/BB (aggressive) AND OTM
+            // Large trades - $200K+ AND AA/BB (aggressive) AND OTM AND Yellow/Magenta (opening position)
             let large = flows.filter(f => {
                 // Must be $200K+
                 if (f.Premium < 200000) return false;
                 // Must be AA or BB (most aggressive execution)
                 if (!['AA', 'BB'].includes(f.Side)) return false;
+                // Must be Yellow or Magenta (OI exceeded = opening position)
+                if (!['YELLOW', 'MAGENTA'].includes(f.Color)) return false;
                 // Must be OTM
                 const isOTM = (f.CallPut === 'CALL' && f.Strike > f.Spot) || 
                               (f.CallPut === 'PUT' && f.Strike < f.Spot);
                 return isOTM;
             }).sort((a,b) => b.Premium - a.Premium);
             
-            // Additional filter for high conviction: require AlertStream signals
+            // Additional filter for high conviction: require directional AlertStream signals
             if (highConvictionOnly) {
                 large = large.filter(t => {
                     return alertStreamData.blocks[t.Symbol] || 
-                           alertStreamData.darkPool[t.Symbol] ||
                            alertStreamData.insider[t.Symbol] ||
                            alertStreamData.orb[t.Symbol] ||
                            alertStreamData.priceSpike[t.Symbol] ||
@@ -1652,7 +1631,7 @@
                     </div>
                 </div>`;
             }).join('');
-            document.getElementById('large-trades').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only trades with confirming AlertStream signals</p>' : '') + (ltHtml || '<p style="color:var(--text-muted)">No trades matching criteria ($200K+ premium, AA/BB execution, OTM).</p>');
+            document.getElementById('large-trades').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only trades with confirming AlertStream signals</p>' : '') + (ltHtml || '<p style="color:var(--text-muted)">No trades matching criteria ($200K+, AA/BB, OTM, Yellow/Magenta).</p>');
 
             // Flow Characteristics: Moneyness + Aggression
             const moneyness = { itm: { count: 0, prem: 0 }, atm: { count: 0, prem: 0 }, otm: { count: 0, prem: 0 } };
