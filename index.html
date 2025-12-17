@@ -282,12 +282,39 @@
             overflow: hidden;
         }
 
+        .section.collapsed .section-content {
+            display: none;
+        }
+
+        .section.collapsed .section-header {
+            border-bottom: none;
+        }
+
         .section-header {
             padding: 1rem 1.25rem;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        .section-header:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .section-chevron {
+            width: 16px;
+            height: 16px;
+            stroke: var(--text-muted);
+            transition: transform 0.2s ease;
+            margin-left: auto;
+        }
+
+        .section.collapsed .section-chevron {
+            transform: rotate(-90deg);
         }
 
         .section-icon {
@@ -627,9 +654,21 @@
                 </select>
             </div>
             <div class="filter-group">
+                <label class="filter-label">Security</label>
+                <select class="filter-select" id="filter-security">
+                    <option value="">All</option>
+                    <option value="STOCK">Stocks Only</option>
+                    <option value="ETF">ETFs Only</option>
+                </select>
+            </div>
+            <div class="filter-group">
                 <label class="filter-label">Expiration</label>
-                <select class="filter-select" id="filter-expiration">
-                    <option value="">All Expirations</option>
+                <select class="filter-select" id="filter-dte">
+                    <option value="">All DTE</option>
+                    <option value="30">≤ 30 days</option>
+                    <option value="60">31-60 days</option>
+                    <option value="90">61-90 days</option>
+                    <option value="90+">90+ days</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -669,7 +708,7 @@
             <div class="stats-grid" id="stats-grid"></div>
 
             <div class="section" id="correlated-signals-section" style="display:none">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('correlated-signals-section')">
                     <div class="section-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -677,12 +716,13 @@
                     </div>
                     <span class="section-title">Correlated Signals</span>
                     <span class="section-badge" id="correlated-signals-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="correlated-signals"></div>
             </div>
 
             <div class="section" id="high-conviction-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('high-conviction-section')">
                     <div class="section-icon bullish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -690,12 +730,13 @@
                     </div>
                     <span class="section-title">High Conviction Flows</span>
                     <span class="section-badge" id="high-conviction-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="high-conviction-flows"></div>
             </div>
 
             <div class="section" id="clustering-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('clustering-section')">
                     <div class="section-icon neutral">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round"/>
@@ -703,12 +744,13 @@
                     </div>
                     <span class="section-title">Trade Clustering</span>
                     <span class="section-badge" id="clustering-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="clustering-analysis"></div>
             </div>
 
             <div class="section" id="large-trades-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('large-trades-section')">
                     <div class="section-icon neutral">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -716,48 +758,52 @@
                     </div>
                     <span class="section-title">Largest Individual Trades</span>
                     <span class="section-badge" id="large-trades-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="large-trades"></div>
             </div>
 
             <div class="section" id="flow-characteristics-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('flow-characteristics-section')">
                     <div class="section-icon neutral">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
                     <span class="section-title">Flow Characteristics</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="flow-characteristics"></div>
             </div>
 
             <div class="section" id="summary-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('summary-section')">
                     <div class="section-icon neutral">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
                     <span class="section-title">Top Tickers by Premium</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="summary-table"></div>
             </div>
 
             <div class="section" id="expiration-heatmap-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('expiration-heatmap-section')">
                     <div class="section-icon neutral">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
                     <span class="section-title">Expiration Heat Map</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="expiration-heatmap"></div>
             </div>
 
             <div class="section" id="golden-sweeps-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('golden-sweeps-section')">
                     <div class="section-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-warning);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -765,12 +811,13 @@
                     </div>
                     <span class="section-title">Golden Sweeps</span>
                     <span class="section-badge" id="golden-sweeps-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="golden-sweeps"></div>
             </div>
 
             <div class="section" id="unusual-section">
-                <div class="section-header">
+                <div class="section-header" onclick="toggleSection('unusual-section')">
                     <div class="section-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -778,6 +825,7 @@
                     </div>
                     <span class="section-title">Unusual Options Activity</span>
                     <span class="section-badge" id="unusual-count">0</span>
+                    <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="section-content" id="unusual-activity"></div>
             </div>
@@ -785,6 +833,11 @@
     </div>
 
     <script>
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('collapsed');
+        }
+
         function toggleCluster(idx) {
             const el = document.getElementById(`cluster-${idx}`);
             const chevron = document.getElementById(`chevron-${idx}`);
@@ -810,7 +863,8 @@
         const output = document.getElementById('analysis-output');
         const filtersEl = document.getElementById('filters');
         const filterTicker = document.getElementById('filter-ticker');
-        const filterExpiration = document.getElementById('filter-expiration');
+        const filterSecurity = document.getElementById('filter-security');
+        const filterDte = document.getElementById('filter-dte');
         const filterType = document.getElementById('filter-type');
         const filterDirection = document.getElementById('filter-direction');
         const filterExcludeItm = document.getElementById('filter-exclude-itm');
@@ -1019,7 +1073,8 @@
 
         // Filter event listeners
         filterTicker.addEventListener('change', applyFilters);
-        filterExpiration.addEventListener('change', applyFilters);
+        filterSecurity.addEventListener('change', applyFilters);
+        filterDte.addEventListener('change', applyFilters);
         filterType.addEventListener('change', applyFilters);
         filterDirection.addEventListener('change', applyFilters);
         filterExcludeItm.addEventListener('change', applyFilters);
@@ -1028,7 +1083,8 @@
 
         function resetFilters() {
             filterTicker.value = '';
-            filterExpiration.value = '';
+            filterSecurity.value = '';
+            filterDte.value = '';
             filterType.value = '';
             filterDirection.value = '';
             filterExcludeItm.checked = false;
@@ -1042,8 +1098,19 @@
             if (filterTicker.value) {
                 filtered = filtered.filter(f => f.Symbol === filterTicker.value);
             }
-            if (filterExpiration.value) {
-                filtered = filtered.filter(f => f.ExpirationDate === filterExpiration.value);
+            if (filterSecurity.value) {
+                filtered = filtered.filter(f => f.StockEtf === filterSecurity.value);
+            }
+            if (filterDte.value) {
+                if (filterDte.value === '30') {
+                    filtered = filtered.filter(f => f.Dte <= 30);
+                } else if (filterDte.value === '60') {
+                    filtered = filtered.filter(f => f.Dte > 30 && f.Dte <= 60);
+                } else if (filterDte.value === '90') {
+                    filtered = filtered.filter(f => f.Dte > 60 && f.Dte <= 90);
+                } else if (filterDte.value === '90+') {
+                    filtered = filtered.filter(f => f.Dte > 90);
+                }
             }
             if (filterType.value) {
                 filtered = filtered.filter(f => f.Type === filterType.value);
@@ -1070,13 +1137,6 @@
             const tickers = [...new Set(flows.map(f => f.Symbol))].sort();
             filterTicker.innerHTML = '<option value="">All Tickers</option>' + 
                 tickers.map(t => `<option value="${t}">${t}</option>`).join('');
-            
-            // Get unique expirations sorted by date
-            const expirations = [...new Set(flows.map(f => f.ExpirationDate))].sort((a, b) => {
-                return new Date(a) - new Date(b);
-            });
-            filterExpiration.innerHTML = '<option value="">All Expirations</option>' + 
-                expirations.map(e => `<option value="${e}">${e}</option>`).join('');
             
             filterCount.innerHTML = `Showing <span>${flows.length}</span> of <span>${flows.length}</span> trades`;
         }
