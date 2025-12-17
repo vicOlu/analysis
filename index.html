@@ -1350,8 +1350,12 @@
                                  Object.keys(alertStreamData.volumeAlert).length > 0;
             
             if (hasAlertData && correlatedSignals.length > 0) {
-                // Filter for high conviction if enabled
-                const displaySignals = highConvictionOnly ? correlatedSignals.filter(cs => cs.confirmation >= 2) : correlatedSignals;
+                // Filter: confirmation >= 1 (no conflicts), limit to top 10
+                let displaySignals = correlatedSignals.filter(cs => cs.confirmation >= 1);
+                if (highConvictionOnly) {
+                    displaySignals = displaySignals.filter(cs => cs.confirmation >= 2);
+                }
+                displaySignals = displaySignals.slice(0, 10);
                 
                 if (displaySignals.length > 0) {
                     correlatedSection.style.display = 'block';
@@ -1497,12 +1501,12 @@
             }
 
             const scored = sigClusters.map(c => ({...c, ...score(c)})).sort((a,b) => b.score - a.score);
-            const highConv = scored.filter(c => c.score >= 6);
+            const highConv = scored.filter(c => c.score >= 7).slice(0, 10);
             document.getElementById('high-conviction-count').textContent = highConv.length;
 
             const hcHtml = highConv.length ? highConv.map(c => {
                 const dir = c.cp === 'CALL' ? 'bullish' : 'bearish';
-                const level = c.score >= 8 ? 'high' : 'medium';
+                const level = c.score >= 9 ? 'high' : 'medium';
                 const avgSpot = c.trades.reduce((s,t) => s + t.Spot, 0) / c.trades.length;
                 const avgDte = Math.round(c.trades.reduce((s,t) => s + t.Dte, 0) / c.trades.length);
                 const sw = c.trades.filter(t => t.Type === 'SWEEP').length;
@@ -1535,11 +1539,15 @@
                     <div class="conviction-score ${level}">Conviction: ${level.toUpperCase()} (${c.score}/${c.max})</div>
                     <p class="flow-analysis">${c.trades.length} trades clustering at $${c.strike} ${c.cp.toLowerCase()}, totaling ${num(c.vol)} contracts.</p>
                 </div>`;
-            }).join('') : '<p style="color:var(--text-muted)">No high conviction flows identified (score 6+ required).</p>';
+            }).join('') : '<p style="color:var(--text-muted)">No high conviction flows identified (score 7+ required).</p>';
             document.getElementById('high-conviction-flows').innerHTML = hcHtml;
 
-            // Clustering
-            const displayClusters = highConvictionOnly ? scored.filter(c => c.score >= 6) : scored;
+            // Clustering - score >= 4 default, score >= 6 for high conviction, limit 10
+            let displayClusters = scored.filter(c => c.score >= 4);
+            if (highConvictionOnly) {
+                displayClusters = displayClusters.filter(c => c.score >= 6);
+            }
+            displayClusters = displayClusters.slice(0, 10);
             document.getElementById('clustering-count').textContent = displayClusters.length;
             const clHtml = displayClusters.map((c, i) => {
                 const dir = c.cp === 'CALL' ? 'bullish' : 'bearish';
@@ -1595,10 +1603,19 @@
             }).join('');
             document.getElementById('clustering-analysis').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only clusters with conviction score ≥ 6</p>' : '') + (clHtml || '<p style="color:var(--text-muted)">No significant clustering detected.</p>');
 
-            // Large trades
-            let large = flows.filter(f => f.Premium >= 200000).sort((a,b) => b.Premium - a.Premium);
+            // Large trades - $200K+ AND AA/BB (aggressive) AND OTM
+            let large = flows.filter(f => {
+                // Must be $200K+
+                if (f.Premium < 200000) return false;
+                // Must be AA or BB (most aggressive execution)
+                if (!['AA', 'BB'].includes(f.Side)) return false;
+                // Must be OTM
+                const isOTM = (f.CallPut === 'CALL' && f.Strike > f.Spot) || 
+                              (f.CallPut === 'PUT' && f.Strike < f.Spot);
+                return isOTM;
+            }).sort((a,b) => b.Premium - a.Premium);
             
-            // Filter for high conviction: only show if ticker has AlertStream signals
+            // Additional filter for high conviction: require AlertStream signals
             if (highConvictionOnly) {
                 large = large.filter(t => {
                     return alertStreamData.blocks[t.Symbol] || 
@@ -1611,7 +1628,7 @@
                 });
             }
             
-            large = large.slice(0, 15);
+            large = large.slice(0, 10);
             document.getElementById('large-trades-count').textContent = large.length;
             const ltHtml = large.map(t => {
                 const dir = t.CallPut === 'CALL' ? (['A','AA'].includes(t.Side) ? 'bullish' : 'bearish') : (['A','AA'].includes(t.Side) ? 'bearish' : 'bullish');
@@ -1635,7 +1652,7 @@
                     </div>
                 </div>`;
             }).join('');
-            document.getElementById('large-trades').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only trades with confirming AlertStream signals</p>' : '') + (ltHtml || '<p style="color:var(--text-muted)">No trades over $200K.</p>');
+            document.getElementById('large-trades').innerHTML = (highConvictionOnly ? '<p style="color:var(--accent-info);font-size:0.85rem;margin-bottom:1rem">🎯 High Conviction: Showing only trades with confirming AlertStream signals</p>' : '') + (ltHtml || '<p style="color:var(--text-muted)">No trades matching criteria ($200K+ premium, AA/BB execution, OTM).</p>');
 
             // Flow Characteristics: Moneyness + Aggression
             const moneyness = { itm: { count: 0, prem: 0 }, atm: { count: 0, prem: 0 }, otm: { count: 0, prem: 0 } };
@@ -1737,7 +1754,7 @@
             
             document.getElementById('flow-characteristics').innerHTML = moneynessHtml + aggressionHtml;
 
-            // Summary with Net Sentiment
+            // Summary with Net Sentiment - require 60%+ directional dominance, limit 10
             const summ = {};
             flows.forEach(f => {
                 if (!summ[f.Symbol]) summ[f.Symbol] = { sym: f.Symbol, prem: 0, vol: 0, n: 0, bullish: 0, bearish: 0 };
@@ -1750,7 +1767,16 @@
                 if (isBullish) summ[f.Symbol].bullish += f.Premium;
                 if (isBearish) summ[f.Symbol].bearish += f.Premium;
             });
-            const top = Object.values(summ).sort((a,b) => b.prem - a.prem).slice(0, 15);
+            // Filter for 60%+ directional dominance
+            const top = Object.values(summ)
+                .filter(t => {
+                    const total = t.bullish + t.bearish;
+                    if (total === 0) return false;
+                    const dominant = Math.max(t.bullish, t.bearish);
+                    return (dominant / total) >= 0.6;
+                })
+                .sort((a,b) => b.prem - a.prem)
+                .slice(0, 10);
             document.getElementById('summary-table').innerHTML = `
                 <table class="summary-table">
                     <thead><tr><th>Ticker</th><th>Trades</th><th>Contracts</th><th>Bullish</th><th>Bearish</th><th>Net</th><th>Premium</th></tr></thead>
@@ -1845,8 +1871,14 @@
                 </div></div>` : '<p style="color:var(--text-muted)">No golden sweeps found (Yellow sweeps, above ask AA, $100K+ premium, 1-2 trades at strike).</p>';
             document.getElementById('golden-sweeps').innerHTML = gsHtml;
 
-            // Unusual
-            const unusual = flows.filter(f => f.Uoa === 'T').sort((a,b) => b.Premium - a.Premium);
+            // Unusual - $100K+ AND (AA/BB OR Yellow/Magenta), limit 10
+            const unusual = flows.filter(f => {
+                if (f.Uoa !== 'T') return false;
+                if (f.Premium < 100000) return false;
+                const isAggressive = ['AA', 'BB'].includes(f.Side);
+                const isOIExceeded = ['YELLOW', 'MAGENTA'].includes(f.Color);
+                return isAggressive || isOIExceeded;
+            }).sort((a,b) => b.Premium - a.Premium).slice(0, 10);
             document.getElementById('unusual-count').textContent = unusual.length;
             
             const uRows = unusual.map(t => {
@@ -1875,7 +1907,7 @@
                         <span>Symbol</span><span>Time</span><span>Type</span><span>C/P</span><span>Side</span><span>OI</span><span>Strike</span><span>Volume</span><span>Price</span><span>Premium</span><span>Exp</span><span>DTE</span>
                     </div>
                     ${uRows}
-                </div></div>` : '<p style="color:var(--text-muted)">No unusual activity detected.</p>';
+                </div></div>` : '<p style="color:var(--text-muted)">No unusual activity matching criteria ($100K+ AND aggressive/OI exceeded).</p>';
             document.getElementById('unusual-activity').innerHTML = uHtml;
         }
 
