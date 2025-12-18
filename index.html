@@ -682,6 +682,16 @@
                     <option value="PUT">Puts Only</option>
                 </select>
             </div>
+            <div class="filter-group">
+                <label class="filter-label">Min Premium</label>
+                <select class="filter-select" id="filter-premium">
+                    <option value="">All</option>
+                    <option value="50000">$50K+</option>
+                    <option value="100000">$100K+</option>
+                    <option value="200000">$200K+</option>
+                    <option value="500000">$500K+</option>
+                </select>
+            </div>
             <div class="filter-toggle">
                 <input type="checkbox" id="filter-exclude-itm">
                 <label for="filter-exclude-itm">Exclude ITM</label>
@@ -862,6 +872,7 @@
         const filterDte = document.getElementById('filter-dte');
         const filterType = document.getElementById('filter-type');
         const filterDirection = document.getElementById('filter-direction');
+        const filterPremium = document.getElementById('filter-premium');
         const filterExcludeItm = document.getElementById('filter-exclude-itm');
         const filterHighConviction = document.getElementById('filter-high-conviction');
         const filterReset = document.getElementById('filter-reset');
@@ -1072,6 +1083,7 @@
         filterDte.addEventListener('change', applyFilters);
         filterType.addEventListener('change', applyFilters);
         filterDirection.addEventListener('change', applyFilters);
+        filterPremium.addEventListener('change', applyFilters);
         filterExcludeItm.addEventListener('change', applyFilters);
         filterHighConviction.addEventListener('change', applyFilters);
         filterReset.addEventListener('click', resetFilters);
@@ -1082,6 +1094,7 @@
             filterDte.value = '';
             filterType.value = '';
             filterDirection.value = '';
+            filterPremium.value = '';
             filterExcludeItm.checked = false;
             filterHighConviction.checked = false;
             applyFilters();
@@ -1112,6 +1125,10 @@
             }
             if (filterDirection.value) {
                 filtered = filtered.filter(f => f.CallPut === filterDirection.value);
+            }
+            if (filterPremium.value) {
+                const minPremium = parseInt(filterPremium.value);
+                filtered = filtered.filter(f => f.Premium >= minPremium);
             }
             if (filterExcludeItm.checked) {
                 filtered = filtered.filter(f => {
@@ -1893,9 +1910,28 @@
         // Export
         exportBtn.addEventListener('click', function() {
             const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-            const clone = document.getElementById('clustering-section').cloneNode(true);
-            clone.querySelectorAll('.cluster-trades-wrapper').forEach(el => el.style.display = 'block');
-            clone.querySelectorAll('.cluster-header svg').forEach(el => el.style.display = 'none');
+            
+            // Clone sections and expand them for export
+            const cloneClustering = document.getElementById('clustering-section').cloneNode(true);
+            cloneClustering.classList.remove('collapsed');
+            cloneClustering.querySelectorAll('.cluster-trades-wrapper').forEach(el => el.style.display = 'block');
+            cloneClustering.querySelectorAll('.cluster-header svg').forEach(el => el.style.display = 'none');
+            
+            // Clone other sections and remove collapsed state
+            const sections = ['correlated-signals-section', 'high-conviction-section', 'large-trades-section', 
+                            'flow-characteristics-section', 'summary-section', 'expiration-heatmap-section',
+                            'golden-sweeps-section', 'unusual-section'];
+            const clonedSections = {};
+            sections.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.style.display !== 'none') {
+                    const clone = el.cloneNode(true);
+                    clone.classList.remove('collapsed');
+                    clonedSections[id] = clone.outerHTML;
+                } else {
+                    clonedSections[id] = '';
+                }
+            });
 
             const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Flow Report - ${currentFileName}</title>
@@ -1915,7 +1951,8 @@ h1{font-size:1.5rem;font-weight:700;margin-bottom:0.25rem}
 .section-icon svg{width:18px;height:18px}
 .section-title{flex:1;font-size:1rem}
 .section-badge{font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:0.25rem 0.6rem;border-radius:6px;background:var(--bg-secondary);color:var(--text-secondary)}
-.section-content{padding:1.25rem}
+.section-chevron{width:16px;height:16px;stroke:var(--text-muted);display:none}
+.section-content{padding:1.25rem;display:block!important}
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:2rem}
 .stat-card{background:linear-gradient(135deg,var(--bg-card),var(--bg-secondary));border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;text-align:center}
 .stat-value{font-family:'JetBrains Mono',monospace;font-size:1.75rem;font-weight:700;margin-bottom:0.25rem}
@@ -1954,19 +1991,24 @@ h1{font-size:1.5rem;font-weight:700;margin-bottom:0.25rem}
 .summary-table tr:last-child td{border-bottom:none}
 .summary-table .ticker{font-family:'JetBrains Mono',monospace;font-weight:600}
 .summary-table .premium{font-family:'JetBrains Mono',monospace;color:var(--accent-info)}
+.signal-badge{display:inline-block;padding:0.2rem 0.5rem;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;margin-right:0.25rem;margin-bottom:0.25rem}
+.correlated-flow{background:var(--bg-secondary);border-radius:8px;padding:1rem;margin-bottom:0.75rem}
+.confirmation-badge{font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:0.2rem 0.5rem;border-radius:4px}
+.earnings-badge{font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:0.15rem 0.4rem;border-radius:4px;background:rgba(210,153,34,0.15);color:var(--accent-warning)}
 .generated{text-align:center;color:var(--text-muted);font-size:0.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border-color)}
 </style></head><body><div class="container">
 <h1>Options Flow Report</h1>
 <p class="subtitle">${currentFileName} · ${date}</p>
 ${document.getElementById('stats-grid').outerHTML}
-${document.getElementById('high-conviction-section').outerHTML}
-${clone.outerHTML}
-${document.getElementById('large-trades-section').outerHTML}
-${document.getElementById('flow-characteristics-section').outerHTML}
-${document.getElementById('summary-section').outerHTML}
-${document.getElementById('expiration-heatmap-section').outerHTML}
-${document.getElementById('golden-sweeps-section').outerHTML}
-${document.getElementById('unusual-section').outerHTML}
+${clonedSections['correlated-signals-section']}
+${clonedSections['high-conviction-section']}
+${cloneClustering.outerHTML}
+${clonedSections['large-trades-section']}
+${clonedSections['flow-characteristics-section']}
+${clonedSections['summary-section']}
+${clonedSections['expiration-heatmap-section']}
+${clonedSections['golden-sweeps-section']}
+${clonedSections['unusual-section']}
 <p class="generated">Generated by Options Flow Analyzer</p>
 </div></body></html>`;
 
