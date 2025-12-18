@@ -701,6 +701,10 @@
                 <label for="filter-unique-tickers" style="color:var(--accent-info)">Unique Tickers Only</label>
             </div>
             <div class="filter-toggle">
+                <input type="checkbox" id="filter-require-blocks">
+                <label for="filter-require-blocks" style="color:var(--accent-warning)">Require AA/BB Blocks</label>
+            </div>
+            <div class="filter-toggle">
                 <input type="checkbox" id="filter-high-conviction">
                 <label for="filter-high-conviction" style="color:var(--accent-bullish);font-weight:600">🎯 High Conviction Only</label>
             </div>
@@ -879,6 +883,7 @@
         const filterPremium = document.getElementById('filter-premium');
         const filterExcludeItm = document.getElementById('filter-exclude-itm');
         const filterUniqueTickers = document.getElementById('filter-unique-tickers');
+        const filterRequireBlocks = document.getElementById('filter-require-blocks');
         const filterHighConviction = document.getElementById('filter-high-conviction');
         const filterReset = document.getElementById('filter-reset');
         const filterCount = document.getElementById('filter-count');
@@ -1091,6 +1096,7 @@
         filterPremium.addEventListener('change', applyFilters);
         filterExcludeItm.addEventListener('change', applyFilters);
         filterUniqueTickers.addEventListener('change', applyFilters);
+        filterRequireBlocks.addEventListener('change', applyFilters);
         filterHighConviction.addEventListener('change', applyFilters);
         filterReset.addEventListener('click', resetFilters);
 
@@ -1103,6 +1109,7 @@
             filterPremium.value = '';
             filterExcludeItm.checked = false;
             filterUniqueTickers.checked = false;
+            filterRequireBlocks.checked = false;
             filterHighConviction.checked = false;
             applyFilters();
         }
@@ -1148,7 +1155,7 @@
             }
             
             filterCount.innerHTML = `Showing <span>${filtered.length}</span> of <span>${allFlows.length}</span> trades`;
-            analyze(filtered, filterHighConviction.checked, filterUniqueTickers.checked);
+            analyze(filtered, filterHighConviction.checked, filterUniqueTickers.checked, filterRequireBlocks.checked);
         }
 
         function populateFilters(flows) {
@@ -1201,7 +1208,7 @@
             });
         }
 
-        function analyze(flows, highConvictionOnly = false, uniqueTickersOnly = false) {
+        function analyze(flows, highConvictionOnly = false, uniqueTickersOnly = false, requireBlocks = false) {
 
             const total = flows.reduce((s, f) => s + f.Premium, 0);
             const calls = flows.filter(f => f.CallPut === 'CALL');
@@ -1358,6 +1365,12 @@
                 let displaySignals = correlatedSignals.filter(cs => cs.confirmation >= 1);
                 if (highConvictionOnly) {
                     displaySignals = displaySignals.filter(cs => cs.confirmation >= 2);
+                }
+                // Filter to only show entries with AA/BB block signals
+                if (requireBlocks) {
+                    displaySignals = displaySignals.filter(cs => 
+                        cs.signals.some(s => s.type === 'block_bullish' || s.type === 'block_bearish')
+                    );
                 }
                 // Filter to unique tickers if enabled (already unique by ticker, but ensure no duplicates)
                 if (uniqueTickersOnly) {
