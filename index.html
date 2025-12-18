@@ -697,6 +697,10 @@
                 <label for="filter-exclude-itm">Exclude ITM</label>
             </div>
             <div class="filter-toggle">
+                <input type="checkbox" id="filter-unique-tickers">
+                <label for="filter-unique-tickers" style="color:var(--accent-info)">Unique Tickers Only</label>
+            </div>
+            <div class="filter-toggle">
                 <input type="checkbox" id="filter-high-conviction">
                 <label for="filter-high-conviction" style="color:var(--accent-bullish);font-weight:600">🎯 High Conviction Only</label>
             </div>
@@ -874,6 +878,7 @@
         const filterDirection = document.getElementById('filter-direction');
         const filterPremium = document.getElementById('filter-premium');
         const filterExcludeItm = document.getElementById('filter-exclude-itm');
+        const filterUniqueTickers = document.getElementById('filter-unique-tickers');
         const filterHighConviction = document.getElementById('filter-high-conviction');
         const filterReset = document.getElementById('filter-reset');
         const filterCount = document.getElementById('filter-count');
@@ -1085,6 +1090,7 @@
         filterDirection.addEventListener('change', applyFilters);
         filterPremium.addEventListener('change', applyFilters);
         filterExcludeItm.addEventListener('change', applyFilters);
+        filterUniqueTickers.addEventListener('change', applyFilters);
         filterHighConviction.addEventListener('change', applyFilters);
         filterReset.addEventListener('click', resetFilters);
 
@@ -1096,6 +1102,7 @@
             filterDirection.value = '';
             filterPremium.value = '';
             filterExcludeItm.checked = false;
+            filterUniqueTickers.checked = false;
             filterHighConviction.checked = false;
             applyFilters();
         }
@@ -1141,7 +1148,7 @@
             }
             
             filterCount.innerHTML = `Showing <span>${filtered.length}</span> of <span>${allFlows.length}</span> trades`;
-            analyze(filtered, filterHighConviction.checked);
+            analyze(filtered, filterHighConviction.checked, filterUniqueTickers.checked);
         }
 
         function populateFilters(flows) {
@@ -1194,7 +1201,7 @@
             });
         }
 
-        function analyze(flows, highConvictionOnly = false) {
+        function analyze(flows, highConvictionOnly = false, uniqueTickersOnly = false) {
 
             const total = flows.reduce((s, f) => s + f.Premium, 0);
             const calls = flows.filter(f => f.CallPut === 'CALL');
@@ -1352,6 +1359,15 @@
                 if (highConvictionOnly) {
                     displaySignals = displaySignals.filter(cs => cs.confirmation >= 2);
                 }
+                // Filter to unique tickers if enabled (already unique by ticker, but ensure no duplicates)
+                if (uniqueTickersOnly) {
+                    const seenTickers = new Set();
+                    displaySignals = displaySignals.filter(cs => {
+                        if (seenTickers.has(cs.ticker)) return false;
+                        seenTickers.add(cs.ticker);
+                        return true;
+                    });
+                }
                 displaySignals = displaySignals.slice(0, 10);
                 
                 if (displaySignals.length > 0) {
@@ -1496,7 +1512,17 @@
             }
 
             const scored = sigClusters.map(c => ({...c, ...score(c)})).sort((a,b) => b.score - a.score);
-            const highConv = scored.filter(c => c.score >= 7).slice(0, 10);
+            let highConv = scored.filter(c => c.score >= 7);
+            // Filter to unique tickers if enabled (keep highest scoring entry per ticker)
+            if (uniqueTickersOnly) {
+                const seenTickers = new Set();
+                highConv = highConv.filter(c => {
+                    if (seenTickers.has(c.symbol)) return false;
+                    seenTickers.add(c.symbol);
+                    return true;
+                });
+            }
+            highConv = highConv.slice(0, 10);
             document.getElementById('high-conviction-count').textContent = highConv.length;
 
             const hcHtml = highConv.length ? highConv.map(c => {
@@ -1541,6 +1567,15 @@
             let displayClusters = scored.filter(c => c.score >= 4);
             if (highConvictionOnly) {
                 displayClusters = displayClusters.filter(c => c.score >= 6);
+            }
+            // Filter to unique tickers if enabled (keep highest scoring entry per ticker)
+            if (uniqueTickersOnly) {
+                const seenTickers = new Set();
+                displayClusters = displayClusters.filter(c => {
+                    if (seenTickers.has(c.symbol)) return false;
+                    seenTickers.add(c.symbol);
+                    return true;
+                });
             }
             displayClusters = displayClusters.slice(0, 10);
             document.getElementById('clustering-count').textContent = displayClusters.length;
