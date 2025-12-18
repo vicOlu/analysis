@@ -1396,9 +1396,13 @@
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;margin-bottom:0.5rem;border-left:3px solid ${cs.direction === 'bullish' ? 'var(--accent-bullish)' : 'var(--accent-bearish)'}">
                         <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
                             <span class="ticker-symbol" style="font-size:1rem">${cs.ticker}</span>
-                            <span class="direction-badge ${cs.direction}" style="font-size:0.65rem">${cs.direction.toUpperCase()}</span>
                             ${confirmBadge}
                             ${signalBadges}
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:0.2rem 0.5rem;border-radius:4px;background:var(--bg-card)">
+                                <span style="color:var(--accent-bullish)">▲${fmt(cs.bullish)}</span>
+                                <span style="color:var(--text-muted);margin:0 0.25rem">/</span>
+                                <span style="color:var(--accent-bearish)">▼${fmt(cs.bearish)}</span>
+                            </span>
                             ${earningsBadge}
                             ${sectorInfo}
                         </div>
