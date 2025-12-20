@@ -121,7 +121,7 @@
         .file-info .file-name { color: var(--accent-info); }
         .file-info .file-size { color: var(--text-muted); }
 
-        .export-buttons { display: flex; justify-content: center; margin-bottom: 2rem; }
+        .export-buttons { display: flex; justify-content: center; margin-bottom: 2rem; gap: 1rem; }
 
         .export-btn {
             display: none;
@@ -633,6 +633,12 @@
         </div>
 
         <div class="export-buttons">
+            <button class="export-btn" id="fetch-prices-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span id="fetch-prices-text">Fetch Live Prices</span>
+            </button>
             <button class="export-btn" id="export-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -872,6 +878,8 @@
         const fileName = document.getElementById('file-name');
         const fileSize = document.getElementById('file-size');
         const exportBtn = document.getElementById('export-btn');
+        const fetchPricesBtn = document.getElementById('fetch-prices-btn');
+        const fetchPricesText = document.getElementById('fetch-prices-text');
         const loading = document.getElementById('loading');
         const output = document.getElementById('analysis-output');
         const filtersEl = document.getElementById('filters');
@@ -898,6 +906,8 @@
         let currentFileName = '';
         let allFlows = []; // Store all flows for filtering
         let alertStreamData = { darkPool: {}, blocks: {}, insider: {}, earnings: {}, sector: {}, weekHigh: {}, weekLow: {}, orb: {}, priceSpike: {}, halted: {}, volumeAlert: {} }; // Store AlertStream data by ticker
+        let livePrices = {}; // Store live prices by ticker
+        const FINNHUB_API_KEY = 'd53d9khr01qkplgudi8gd53d9khr01qkplgudi90';
 
         uploadZone.addEventListener('click', () => fileInput.click());
         uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
@@ -1173,6 +1183,9 @@
             fileSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
             fileInfo.classList.add('visible');
             exportBtn.classList.remove('visible');
+            fetchPricesBtn.classList.remove('visible');
+            livePrices = {}; // Reset live prices
+            fetchPricesText.textContent = 'Fetch Live Prices'; // Reset button text
             filtersEl.classList.remove('visible');
             loading.classList.add('visible');
             output.classList.remove('visible');
@@ -1201,6 +1214,7 @@
                         loading.classList.remove('visible');
                         output.classList.add('visible');
                         exportBtn.classList.add('visible');
+                        fetchPricesBtn.classList.add('visible');
                         filtersEl.classList.add('visible');
                     }, 400);
                 },
@@ -1388,6 +1402,11 @@
                     document.getElementById('correlated-signals-count').textContent = displaySignals.length;
                     
                     const csHtml = displaySignals.map(cs => {
+                    // Get average spot from this ticker's flows for live price comparison
+                    const tickerFlows = flows.filter(f => f.Symbol === cs.ticker);
+                    const avgSpot = tickerFlows.length > 0 ? tickerFlows.reduce((s,f) => s + f.Spot, 0) / tickerFlows.length : 0;
+                    const livePriceInfo = getLivePriceInfo(cs.ticker, avgSpot, cs.direction);
+                    
                     const signalBadges = cs.signals.map(s => {
                         if (s.type === 'block_bullish') return `<span class="signal-badge" style="background:rgba(63,185,80,0.15);color:var(--accent-bullish)">▲ Block AA ×${s.count} ${fmt(s.notional)}${s.match ? ' ✓' : ''}</span>`;
                         if (s.type === 'block_bearish') return `<span class="signal-badge" style="background:rgba(248,81,73,0.15);color:var(--accent-bearish)">▼ Block BB ×${s.count} ${fmt(s.notional)}${s.match ? ' ✓' : ''}</span>`;
@@ -1416,6 +1435,7 @@
                                 <span style="color:var(--text-muted);margin:0 0.25rem">/</span>
                                 <span style="color:var(--accent-bearish)">▼${fmt(cs.bearish)}</span>
                             </span>
+                            ${livePriceInfo.badge}
                             ${earningsBadge}
                             ${sectorInfo}
                         </div>
@@ -1460,6 +1480,29 @@
                     badges += `<span class="signal-badge" style="background:rgba(248,81,73,0.25);color:var(--accent-bearish);font-size:0.65rem">⛔ HALTED</span>`;
                 }
                 return badges;
+            }
+            
+            // Get live price info for a ticker
+            function getLivePriceInfo(ticker, spotAtFlow, direction = null) {
+                if (!livePrices[ticker]) return { badge: '', detail: '' };
+                
+                const lp = livePrices[ticker];
+                const current = lp.current;
+                const changeFromFlow = ((current - spotAtFlow) / spotAtFlow * 100).toFixed(2);
+                const isUp = current > spotAtFlow;
+                const changeColor = isUp ? 'var(--accent-bullish)' : 'var(--accent-bearish)';
+                const arrow = isUp ? '▲' : '▼';
+                
+                // Determine if trade is "winning" based on direction
+                let winIndicator = '';
+                if (direction) {
+                    const isWinning = (direction === 'bullish' && isUp) || (direction === 'bearish' && !isUp);
+                    winIndicator = isWinning ? ' ✓' : ' ✗';
+                }
+                
+                const badge = `<span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:0.2rem 0.5rem;border-radius:4px;background:rgba(88,166,255,0.15);color:var(--accent-info)">Now: $${current.toFixed(2)}</span><span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:0.2rem 0.4rem;border-radius:4px;background:${isUp ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)'};color:${changeColor}">${arrow}${Math.abs(changeFromFlow)}%${winIndicator}</span>`;
+                
+                return { badge, current, changeFromFlow, isUp };
             }
 
             // Clustering
@@ -1550,6 +1593,7 @@
                 const sw = c.trades.filter(t => t.Type === 'SWEEP').length;
                 const bl = c.trades.filter(t => t.Type === 'BLOCK').length;
                 const earningsBadge = getEarningsBadge(c.symbol);
+                const livePriceInfo = getLivePriceInfo(c.symbol, avgSpot, dir);
                 return `
                 <div class="flow-card">
                     <div class="flow-card-header">
@@ -1557,6 +1601,7 @@
                             <span class="ticker-symbol">${c.symbol}</span>
                             <span class="direction-badge ${dir}">${c.cp}</span>
                             ${earningsBadge}
+                            ${livePriceInfo.badge}
                         </div>
                         <div class="flow-premium">
                             <div class="premium-value">${fmt(c.prem)}</div>
@@ -1599,16 +1644,35 @@
             const clHtml = displayClusters.map((c, i) => {
                 const dir = c.cp === 'CALL' ? 'bullish' : 'bearish';
                 const earningsBadge = getEarningsBadge(c.symbol);
+                const avgSpot = c.trades.reduce((s,t) => s + t.Spot, 0) / c.trades.length;
+                const livePriceInfo = getLivePriceInfo(c.symbol, avgSpot, dir);
                 const rows = c.trades.sort((a,b) => {
                     // Sort by date then time (newest first)
-                    const aDateTime = `${a.CreatedDate||''}|${a.CreatedTime||''}`;
-                    const bDateTime = `${b.CreatedDate||''}|${b.CreatedTime||''}`;
-                    return bDateTime.localeCompare(aDateTime);
+                    // First compare dates
+                    const aDate = a.CreatedDate || '';
+                    const bDate = b.CreatedDate || '';
+                    if (aDate !== bDate) {
+                        return bDate.localeCompare(aDate);
+                    }
+                    // Then compare times (convert to 24h for proper sorting)
+                    const parseTime = (t) => {
+                        if (!t) return 0;
+                        const match = t.match(/(\d+):(\d+):(\d+)\s*(AM|PM)?/i);
+                        if (!match) return 0;
+                        let hours = parseInt(match[1]);
+                        const mins = parseInt(match[2]);
+                        const secs = parseInt(match[3]);
+                        const period = (match[4] || '').toUpperCase();
+                        if (period === 'PM' && hours !== 12) hours += 12;
+                        if (period === 'AM' && hours === 12) hours = 0;
+                        return hours * 3600 + mins * 60 + secs;
+                    };
+                    return parseTime(b.CreatedTime) - parseTime(a.CreatedTime);
                 }).map(t => {
                     const oiDot = ['YELLOW','MAGENTA'].includes(t.Color) ? `<span style="color:${t.Color==='YELLOW'?'var(--accent-warning)':'var(--accent-purple)'}">●</span>` : '<span style="color:var(--text-muted)">○</span>';
                     const sideCol = ['A','AA'].includes(t.Side) ? 'var(--accent-bullish)' : 'var(--accent-bearish)';
                     const uoa = t.Uoa === 'T' ? '<span style="color:var(--accent-purple)">✓</span>' : '-';
-                    return `<div style="display:grid;grid-template-columns:85px 75px 55px 65px 55px 75px 70px 70px 70px 40px 45px;gap:0.25rem;padding:0.4rem 0.75rem;border-bottom:1px solid var(--border-color);font-family:'JetBrains Mono',monospace;font-size:0.75rem;align-items:center;white-space:nowrap;">
+                    return `<div style="display:grid;grid-template-columns:85px 90px 70px 65px 55px 75px 70px 70px 70px 40px 45px;gap:0.25rem;padding:0.4rem 0.75rem;border-bottom:1px solid var(--border-color);font-family:'JetBrains Mono',monospace;font-size:0.75rem;align-items:center;white-space:nowrap;">
                         <span style="color:var(--text-muted)">${t.CreatedDate||'-'}</span>
                         <span style="color:var(--text-muted)">${t.CreatedTime||'-'}</span>
                         <span style="color:var(--text-secondary)">${t.Type}</span>
@@ -1631,6 +1695,7 @@
                             <span class="ticker-symbol" style="font-size:1rem">${c.symbol}</span>
                             <span class="direction-badge ${dir}" style="font-size:0.65rem">${c.cp}</span>
                             ${earningsBadge}
+                            ${livePriceInfo.badge}
                             <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text-secondary)">$${c.strike} · ${c.exp}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:1.5rem">
@@ -1639,8 +1704,8 @@
                         </div>
                     </div>
                     <div id="cluster-${i}" class="cluster-trades-wrapper" style="display:none;border-top:1px solid var(--border-color);background:var(--bg-card)">
-                        <div style="min-width:850px">
-                            <div style="display:grid;grid-template-columns:85px 75px 55px 65px 55px 75px 70px 70px 70px 40px 45px;gap:0.25rem;padding:0.4rem 0.75rem;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border-color);white-space:nowrap">
+                        <div style="min-width:880px">
+                            <div style="display:grid;grid-template-columns:85px 90px 70px 65px 55px 75px 70px 70px 70px 40px 45px;gap:0.25rem;padding:0.4rem 0.75rem;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border-color);white-space:nowrap">
                                 <span>Date</span><span>Time</span><span>Type</span><span>Side</span><span>OI</span><span>Volume</span><span>Price</span><span>Premium</span><span>Spot</span><span>DTE</span><span>UOA</span>
                             </div>
                             ${rows}
@@ -1684,11 +1749,13 @@
                 const sideColor = ['A','AA'].includes(t.Side) ? 'var(--accent-bullish)' : 'var(--accent-bearish)';
                 const oiDot = ['YELLOW','MAGENTA'].includes(t.Color) ? `<span style="color:${t.Color==='YELLOW'?'var(--accent-warning)':'var(--accent-purple)'}">●</span>` : '<span style="color:var(--text-muted)">○</span>';
                 const earningsBadge = getEarningsBadge(t.Symbol);
+                const livePriceInfo = getLivePriceInfo(t.Symbol, t.Spot, dir);
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;margin-bottom:0.5rem">
-                    <div style="display:flex;align-items:center;gap:0.75rem">
+                    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
                         <span class="ticker-symbol" style="font-size:1rem">${t.Symbol}</span>
                         <span class="direction-badge ${dir}" style="font-size:0.65rem">${t.CallPut}</span>
                         ${earningsBadge}
+                        ${livePriceInfo.badge}
                         <span style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text-secondary)">$${t.Strike} · ${t.ExpirationDate}</span>
                         <span style="font-size:0.7rem;color:var(--text-muted)">${t.Type}</span>
                         <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:${sideColor}">${sideLabel}</span>
@@ -1958,6 +2025,55 @@
                 </div></div>` : '<p style="color:var(--text-muted)">No unusual activity matching criteria ($100K+ AND aggressive/OI exceeded).</p>';
             document.getElementById('unusual-activity').innerHTML = uHtml;
         }
+
+        // Fetch Live Prices from Finnhub
+        async function fetchLivePrices() {
+            const tickers = [...new Set(allFlows.map(f => f.Symbol))];
+            if (tickers.length === 0) return;
+            
+            fetchPricesText.textContent = 'Fetching...';
+            fetchPricesBtn.disabled = true;
+            
+            let fetched = 0;
+            const total = tickers.length;
+            
+            for (const ticker of tickers) {
+                try {
+                    const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+                    const data = await response.json();
+                    if (data && data.c && data.c > 0) {
+                        livePrices[ticker] = {
+                            current: data.c,
+                            change: data.d,
+                            changePercent: data.dp,
+                            high: data.h,
+                            low: data.l,
+                            open: data.o,
+                            prevClose: data.pc,
+                            timestamp: Date.now()
+                        };
+                    }
+                    fetched++;
+                    fetchPricesText.textContent = `Fetching... ${fetched}/${total}`;
+                    
+                    // Rate limit: 60 calls/min = 1 per second to be safe
+                    if (fetched < total) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (err) {
+                    console.error(`Error fetching ${ticker}:`, err);
+                }
+            }
+            
+            const priceCount = Object.keys(livePrices).length;
+            fetchPricesText.textContent = `✓ ${priceCount} Prices Loaded`;
+            fetchPricesBtn.disabled = false;
+            
+            // Re-run analysis to update displays with live prices
+            applyFilters();
+        }
+        
+        fetchPricesBtn.addEventListener('click', fetchLivePrices);
 
         // Export
         exportBtn.addEventListener('click', function() {
